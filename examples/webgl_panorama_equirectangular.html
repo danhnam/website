@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Equirectangular panorama</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        <style>
+            body {
+                background-color: #000000;
+                margin: 0px;
+                overflow: hidden;
+            }
+            
+            #info {
+                position: absolute;
+                top: 0px; width: 100%;
+                color: #ffffff;
+                padding: 5px;
+                font-family:Monospace;
+                font-size:13px;
+                font-weight: bold;
+                text-align:center;
+            }
+            
+            a {
+                color: #ffffff;
+            }
+            
+            #log{
+                position: absolute;
+                background: #fff;
+                padding: 20px;
+                bottom: 20px;
+                left: 20px;
+                width: 150px;
+                font: normal 12px/18px Monospace, Arial, Helvetical, sans-serif;
+                text-align: left;
+                border: 3px double #ddd;
+            }
+        </style>
+        <link href="favicon.ico" type="image/x-icon" rel="icon" />
+    </head>
+    <body>
+        
+        <div id="container">
+            <div id="log"></div>
+        </div>
+        <script src="../build/three.js"></script>
+        
+        <script>
+            //window.addEventListener('load', init, false);
+            /*Define Colors*/
+            var Colors = {
+                red:0xf25346,
+                redOrange:0xff3333,
+                darkOrange:0xff8800,
+                white:0xd8d0d1,
+                brown:0x59332e,
+                pink:0xF5986E,
+                brownDark:0x23190f,
+                blue:0x68c3c0,
+                gorse:0xffff33,
+                limeGreen:0x33ff33,
+                neonBlue:0x3333ff,
+                blueViolet:0x8833ff,
+            };
+            
+            // Create an array of materials to be used in a cube, one for each side
+            var cubeMaterialArray = [];
+            // order to add materials: x+,x-,y+,y-,z+,z-
+            cubeMaterialArray.push( new THREE.MeshBasicMaterial( { color:Colors.redOrange } ) );
+            cubeMaterialArray.push( new THREE.MeshBasicMaterial( { color:Colors.darkOrange} ) );
+            cubeMaterialArray.push( new THREE.MeshBasicMaterial( { color:Colors.gorse} ) );
+            cubeMaterialArray.push( new THREE.MeshBasicMaterial( { color:Colors.limeGreen} ) );
+            cubeMaterialArray.push( new THREE.MeshBasicMaterial( { color:Colors.neonBlue} ) );
+            cubeMaterialArray.push( new THREE.MeshBasicMaterial( { color:Colors.blueViolet} ) );
+            //var cubeMaterials = new THREE.MeshFaceMaterial( cubeMaterialArray );
+                
+            var material = new THREE.MeshBasicMaterial( {
+                map: new THREE.TextureLoader().load( 'textures/1.jpg' ), transparent: true, opacity: 0.9, color: Colors.red,
+            } );
+                
+            var materialnO2 = new THREE.MeshBasicMaterial( {
+                map: new THREE.TextureLoader().load( 'textures/2.jpg' ), transparent: true, opacity: 0.9, color: Colors.red,
+            } );
+            // Định nghĩa đối tượng Sea
+            
+            var Box = function(){
+                this.mesh = new THREE.Object3D();
+                this.mesh.name = "box";
+                var boxGMT = new THREE.CubeGeometry(50,50,50);
+                var boxMAT = new THREE.MeshBasicMaterial( { color: 0x33ff33 } );
+                this.mesh = new THREE.Mesh(boxGMT,boxMAT);
+            }
+            
+            var Sphere = function(){
+                this.mesh = new THREE.Object3D();
+                this.mesh.name = "sphere";
+                var sphereGMT = new THREE.SphereBufferGeometry(50, 60, 40 );
+                sphereGMT.scale(-1,1,1);  
+                var boxMAT = new THREE.MeshBasicMaterial( { color: Colors.red} );
+                this.mesh = new THREE.Mesh( sphereGMT, boxMAT );
+            }
+            
+            var Sea = function(){
+                this.mesh = new THREE.Object3D();
+                // tạo khối hình trụ
+                // các tham số:
+                // bán kính mặt trên, bán kính mặt đáy, chiều cao, số lượng phân khúc trên bán kính, số lượng phân khúc theo chiều dọc
+                var geom = new THREE.CylinderGeometry(300,300,400,20,5);
+
+                // xoay trên trục X
+                geom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI/2));
+
+                // tạo chất liệu
+                var mat = new THREE.MeshBasicMaterial( { color: 0x0000ff } );
+                
+                /* THREE.MeshFaceMaterial has been removed. Use an Array instead
+                 * var mat = new THREE.MeshPhongMaterial({
+                    color:Colors.blue,
+                    transparent:true,
+                    opacity:.6,
+                    shading:THREE.FlatShading,
+                });*/
+
+                // Để tạo một đối tượng trong Three.js, ta phải tạo ra một lưới (mesh)
+                // là sự kết hợp của một hình khối và chất liệu
+                this.mesh = new THREE.Mesh(geom, mat);
+
+                // Cho phép bóng đổ trên biển
+                this.mesh.receiveShadow = true;
+            }
+            
+            var AirPlane = function() {
+
+                this.mesh = new THREE.Object3D();
+
+                // Tạo cabin
+                var geomCockpit = new THREE.BoxGeometry(60,50,50,1,1,1);
+                //var matCockpit = new THREE.MeshPhongMaterial({color:Colors.red, shading:THREE.FlatShading});
+                var matCockpit = new THREE.MeshBasicMaterial( { color:Colors.blue, shading:THREE.FlatShading } );
+                var cockpit = new THREE.Mesh(geomCockpit, matCockpit);
+                cockpit.castShadow = true;
+                cockpit.receiveShadow = true;
+                this.mesh.add(cockpit);
+
+                // Tạo động cơ
+                var geomEngine = new THREE.BoxGeometry(20,50,50,1,1,1);
+                //var matEngine = new THREE.MeshPhongMaterial({color:Colors.white, shading:THREE.FlatShading});
+                var matEngine = new THREE.MeshBasicMaterial( { color:Colors.white, shading:THREE.FlatShading } );
+                var engine = new THREE.Mesh(geomEngine, matEngine);
+                engine.position.x = 40;
+                engine.castShadow = true;
+                engine.receiveShadow = true;
+                this.mesh.add(engine);
+                
+                
+                // Tạo đuôi
+                var geomTailPlane = new THREE.BoxGeometry(15,20,5,1,1,1);
+                var matTailPlane = new THREE.MeshBasicMaterial({color:Colors.darkOrange, shading:THREE.FlatShading});
+                var tailPlane = new THREE.Mesh(geomTailPlane, matTailPlane);
+                tailPlane.position.set(-35,25,0);
+                tailPlane.castShadow = true;
+                tailPlane.receiveShadow = true;
+                this.mesh.add(tailPlane);
+
+                // Tạo cánh
+                var geomSideWing = new THREE.BoxGeometry(40,8,150,1,1,1);
+                var matSideWing = new THREE.MeshBasicMaterial({color:Colors.gorse, shading:THREE.FlatShading});
+                var sideWing = new THREE.Mesh(geomSideWing, matSideWing);
+                sideWing.castShadow = true;
+                sideWing.receiveShadow = true;
+                this.mesh.add(sideWing);
+
+                // phần quạt
+                var geomPropeller = new THREE.BoxGeometry(20,10,10,1,1,1);
+                var matPropeller = new THREE.MeshBasicMaterial({color:Colors.limeGreen, shading:THREE.FlatShading});
+                this.propeller = new THREE.Mesh(geomPropeller, matPropeller);
+                this.propeller.castShadow = true;
+                this.propeller.receiveShadow = true;
+
+                // cánh quạt
+                var geomBlade = new THREE.BoxGeometry(1,100,20,1,1,1);
+                var matBlade = new THREE.MeshBasicMaterial({color:Colors.redOrange, shading:THREE.FlatShading});
+
+                var blade = new THREE.Mesh(geomBlade, matBlade);
+                blade.position.set(8,0,0);
+                blade.castShadow = true;
+                blade.receiveShadow = true;
+                this.propeller.add(blade);
+                this.propeller.position.set(50,0,0);
+                this.mesh.add(this.propeller);
+                
+                // Engine
+
+                var geomEngine = new THREE.BoxGeometry(16,45,50,1,1,1);
+                var matEngine = new THREE.MeshBasicMaterial({color:Colors.white, shading:THREE.FlatShading});
+                var engine = new THREE.Mesh(geomEngine, matEngine);
+                engine.position.x = 50;
+                engine.castShadow = true;
+                engine.receiveShadow = true;
+                this.mesh.add(engine);
+
+            }
+            
+            var scene;
+            var camera, fieldOfView, aspectRatio, nearPlane = 1, farPlane = 1000;
+            var hemisphereLight, shadowLight;
+
+            var renderer,container;
+            
+            var sphere1,geometry,meshNo2;
+            var cube;
+            var airplane;
+            var isUserInteracting = false,
+                    onMouseDownMouseX = 0, onMouseDownMouseY = 0,
+                    lon = 0, onMouseDownLon = 0,
+                    lat = 0, onMouseDownLat = 0,
+                    phi = 0, theta = 0;
+            
+            
+            init();
+            animate();
+
+            function init() {
+                
+                container = document.getElementById( 'container' );
+                //Create scene
+                createScene();
+                
+                //Create Lights
+                //createLights();
+
+                var sphere = new Sphere();
+                //sphere.mesh.position.set(camera.position.x, camera.position.y, camera.position.z);
+                sphere.mesh.position.set(0,0,0);
+                sphere.mesh.material = new THREE.MeshBasicMaterial( {
+                    map: new THREE.TextureLoader().load( 'textures/1.jpg' )
+                    //, color:Colors.white //sphere.mesh.material.color.setHex(Colors.blue);
+                } );
+                scene.add(sphere.mesh);
+                
+                var sphere2 = new Sphere();
+                sphere2.mesh.position.set(0,200,0);
+                sphere2.mesh.material = new THREE.MeshBasicMaterial( {
+                    map: new THREE.TextureLoader().load( 'textures/2.jpg' )
+                    //, color:Colors.white //sphere.mesh.material.color.setHex(Colors.blue);
+                } );
+                scene.add( sphere2.mesh );
+
+                
+                
+                // NamHD::Task1: Add for sprite text
+                var spritey1 = makeTextSprite( "Kim Ngưu", 
+                { fontsize: 48,borderThickness: 1, borderColor: {r:255, g:255, b:0, a:1.0}, backgroundColor: {r:100, g:255, b:255, a:0.8} } );
+                var spritey2 = makeTextSprite( "Tô Lịch");
+                spritey1.position.set(50,0,100);
+                spritey2.position.set(50,0,55);
+                scene.add( spritey1 );                
+                scene.add( spritey2 );
+
+                var sea = new Sea();
+                sea.mesh.position.set(0,0,0);
+                // Thêm lưới này vào scene
+                //scene.add(sea.mesh);
+                
+                // Add airplane
+                airplane = new AirPlane();
+                airplane.mesh.scale.set(.25,.25,.25);
+                airplane.mesh.position.y = 100;
+                scene.add(airplane.mesh);
+                
+                //var box = new Box();
+                //box.mesh.position.set(0,0,200);
+                //scene.add(box.mesh);
+                
+                // Box 1
+                var geometry = new THREE.CubeGeometry( 15,15,15);
+                var material = new THREE.MeshBasicMaterial( { color:Colors.blue} );
+                //material.FrontSide.color.set({ color: 0x0000ff })
+                var cube = new THREE.Mesh( geometry, new THREE.MeshFaceMaterial( cubeMaterialArray ) );
+                //cube.position
+                cube.position.set(50,10,150);
+                scene.add( cube );
+                //camera.position.set(50,10,150);
+                
+                var axes = new THREE.AxesHelper(500,500,500);
+                scene.add( axes );
+                
+                document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+                document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+                document.addEventListener( 'mouseup', onDocumentMouseUp, false );
+                document.addEventListener( 'wheel', onDocumentMouseWheel, false );
+                //
+                document.addEventListener( 'dragover', function ( event ) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'copy';
+                }, false );
+                document.addEventListener( 'dragenter', function ( event ) {
+                    document.body.style.opacity = 0.5;
+                }, false );
+                document.addEventListener( 'dragleave', function ( event ) {
+                    document.body.style.opacity = 1;
+                }, false );
+                document.addEventListener( 'drop', function ( event ) {
+                    event.preventDefault();
+                    var reader = new FileReader();
+                    reader.addEventListener( 'load', function ( event ) {
+                        material.map.image.src = event.target.result;
+                        material.map.needsUpdate = true;
+                    }, false );
+                    reader.readAsDataURL( event.dataTransfer.files[ 0 ] );
+                    document.body.style.opacity = 1;
+                }, false );
+
+                // Update camera and size renderer while the brower is resized
+                window.addEventListener( 'resize', onWindowResize, false );
+                window.addEventListener("keypress", changeCameraPosition, false);
+                window.addEventListener("onkeydown", cchangeCameraPosition, false);
+            }
+
+            function createScene(){
+                /*--Create scene--*/
+                scene = new THREE.Scene();
+                //scene.fog = new THREE.Fog(0xf7d9aa, 100, 950); // Add fog
+                
+                /*--Create camera--*/
+                fieldOfView = 75;
+                aspectRatio = window.innerWidth / window.innerHeight;
+                nearPlane = 1;
+                farPlane = 1100;
+                camera = new THREE.PerspectiveCamera( fieldOfView, aspectRatio, nearPlane, farPlane );
+                camera.target = new THREE.Vector3( 0, 0, 0 );       // Set camera target
+                camera.position.set(0,0,000);                     // Set camera position
+                
+                /*--Create renderer--*/
+                renderer = new THREE.WebGLRenderer();
+                renderer.setPixelRatio( window.devicePixelRatio );
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                container.appendChild( renderer.domElement );
+
+            }
+            
+            function createLights() {
+                /*Nguồn sáng bán cầu là loại có màu tô chuyển (gradient)
+                 tham số đầu tiên là màu trời, thứ 2 là màu đất,
+                 thứ 3 là cường độ ánh sáng*/
+                hemisphereLight = new THREE.HemisphereLight(0xaaaaaa,0x000000, .9);
+
+                // Nguồn sáng có hướng tỏa ra từ 1 vị trí nhất định
+                // Nó giống như mặt trời, nghĩa là các tia được tạo ra song song với nhau.
+                shadowLight = new THREE.DirectionalLight(0xffffff, .9);
+
+                // Đặt vị trí cho nguồn sáng
+                shadowLight.position.set(150, 350, 350);
+
+                // Cho phép phủ bóng
+                shadowLight.castShadow = true;
+
+                // cài đặt vùng nhìn thấy của bóng đổ
+                shadowLight.shadow.camera.left = -400;
+                shadowLight.shadow.camera.right = 400;
+                shadowLight.shadow.camera.top = 400;
+                shadowLight.shadow.camera.bottom = -400;
+                shadowLight.shadow.camera.near = 1;
+                shadowLight.shadow.camera.far = 1000;
+
+                // cài đặt độ phân giải của bóng đổ; càng cao càng đẹp,
+                // nhưng cũng càng nặng nề hơn
+                shadowLight.shadow.mapSize.width = 2048;
+                shadowLight.shadow.mapSize.height = 2048;
+
+                // thêm vào scene để kích hoạt
+                scene.add(hemisphereLight);
+                scene.add(shadowLight);
+            }
+            
+            /*--Update size of Renderer and Camera--*/
+            function onWindowResize() {
+                // Update size of Renderer and Camera
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+            }
+            
+            function makeTextSprite( message, parameters )
+            {
+                var body = document.body,
+                        html = document.documentElement;
+                var height = Math.max( body.scrollHeight, body.offsetHeight, 
+                html.clientHeight, html.scrollHeight, html.offsetHeight );
+                       
+                if ( parameters === undefined ) parameters = {};
+                var fontface = parameters.hasOwnProperty("fontface") ? parameters["fontface"] : "Arial";
+                var fontsize = parameters.hasOwnProperty("fontsize") ? parameters["fontsize"] :30;
+                var borderThickness = parameters.hasOwnProperty("borderThickness") ? parameters["borderThickness"] : 3;
+                var borderColor = parameters.hasOwnProperty("borderColor") ?parameters["borderColor"] : { r:0, g:0, b:0, a:1.0 };
+                var backgroundColor = parameters.hasOwnProperty("backgroundColor") ?parameters["backgroundColor"] : { r:255, g:255, b:255, a:1.0 };
+                var textColor = parameters.hasOwnProperty("textColor") ?parameters["textColor"] : { r:0, g:0, b:0, a:1.0 };
+
+                var canvas = document.createElement('canvas');
+                var context = canvas.getContext('2d');
+                context.font = "Bold " + fontsize + "px " + fontface;
+                var metrics = context.measureText( message );
+                var textWidth = metrics.width;
+
+                context.fillStyle   = "rgba(" + backgroundColor.r + "," + backgroundColor.g + "," + backgroundColor.b + "," + backgroundColor.a + ")";
+                context.strokeStyle = "rgba(" + borderColor.r + "," + borderColor.g + "," + borderColor.b + "," + borderColor.a + ")";
+
+                context.lineWidth = borderThickness;
+                roundRect(context, borderThickness/2, borderThickness/2, (textWidth + borderThickness) * 1.5, fontsize * 1.4 + borderThickness, 8);
+
+                context.fillStyle = "rgba("+textColor.r+", "+textColor.g+", "+textColor.b+", 1.0)";
+                context.fillText( message, borderThickness, fontsize + borderThickness);
+
+                var texture = new THREE.Texture(canvas) ;
+                texture.needsUpdate = true;
+
+                var spriteMaterial = new THREE.SpriteMaterial( { map: texture, useScreenCoordinates: false } );
+                var sprite = new THREE.Sprite( spriteMaterial );
+                sprite.scale.set(0.5 * fontsize, 0.25 * fontsize, 1);
+                return sprite;  
+            }
+            // function for drawing rounded rectangles
+            function roundRect(ctx, x, y, w, h, r) {
+                ctx.beginPath();
+                ctx.moveTo(x+r, y);
+                ctx.lineTo(x+w-r, y);
+                ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+                ctx.lineTo(x+w, y+h-r);
+                ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+                ctx.lineTo(x+r, y+h);
+                ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+                ctx.lineTo(x, y+r);
+                ctx.quadraticCurveTo(x, y, x+r, y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();   
+            }
+
+            function onDocumentMouseDown( event ) {
+               
+                event.preventDefault();
+
+                isUserInteracting = true;
+                    
+                onMouseDownMouseX = event.clientX;
+                onMouseDownMouseY = event.clientY;
+
+                onMouseDownLon = lon;
+                onMouseDownLat = lat;
+            }
+
+            function onDocumentMouseMove( event ) {
+                if ( isUserInteracting === true ) {
+
+                    lon = ( onMouseDownMouseX - event.clientX ) * 0.1 + onMouseDownLon;
+                    lat = ( event.clientY - onMouseDownMouseY ) * 0.1 + onMouseDownLat;
+
+                }
+ 
+            }
+            var i = camera.position.z;
+            function onDocumentMouseUp( event ) {
+
+                isUserInteracting = false;
+                
+                
+                //                camera.position.set(50,10,i);
+                //                i += 2;
+            }
+
+            function onDocumentMouseWheel( event ) {
+
+                var fov = camera.fov + event.deltaY * 0.05;
+
+                camera.fov = THREE.Math.clamp( fov, 10, 75 );
+
+                camera.updateProjectionMatrix();
+
+            }
+            
+            function changeCameraPosition(event){
+                var x = event.charCode || event.keyCode || event.onkeydown;
+
+                switch(x) {
+                    case 48||96:
+                        camera.position.set(0,0,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 49||97:
+                        camera.position.set(500,0,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 50||98:
+                        camera.position.set(0,500,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 51||99:
+                        camera.position.set(0,0,500);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 52||100:
+                        camera.position.set(0,200,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 53||101:
+                        camera.position.set(0,0,i);
+                        i += 1;
+                        break;
+                    case 54||102:
+                        camera.position.set(0,0,i);
+                        i -= 1;
+                        break;
+                }
+            }
+
+            function cchangeCameraPosition(event){
+                var x = event.key || event.keyCode;
+
+                switch(x) {
+                    case Key.LEFT:
+                        camera.position.set(50,10,i);
+                        i += 2;
+                        break;
+                    case 48||96:
+                        camera.position.set(0,0,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 49||97:
+                        camera.position.set(500,0,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 50||98:
+                        camera.position.set(0,500,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 51||99:
+                        camera.position.set(0,0,500);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+                    case 52||100:
+                        camera.position.set(0,200,0);
+                        camera.target = new THREE.Vector3( 0, 0, 0 );
+                        break;
+
+                }
+            }
+
+
+            function animate() {
+
+                requestAnimationFrame( animate );
+                update();
+
+            }
+            
+            var airplaneMaxHeight = 200;
+            var deg = 0;
+            function update() {
+
+                if ( isUserInteracting === false ) {
+
+                    // lon += 0.05; //NamHD: COmment for no rotate mode
+                    
+                }
+                
+                lat = Math.max( - 85, Math.min( 85, lat ) );
+                phi = THREE.Math.degToRad( 90 - lat );
+                theta = THREE.Math.degToRad( lon );
+
+                camera.target.x = 500 * Math.sin( phi ) * Math.cos( theta );
+                camera.target.y = 500 * Math.cos( phi );
+                camera.target.z = 500 * Math.sin( phi ) * Math.sin( theta );
+                
+                //                camera.target.x = airplane.mesh.position.x;
+                //                camera.target.y = airplane.mesh.position.y;
+                //                camera.target.z = airplane.mesh.position.z;
+                
+                //NamHD: Camera position
+                var iter = 1;
+                //camera.position.set(10,50,150);
+                //camera.position.set(camera.position.x + iter, camera.position.y,camera.position.z);
+                //
+                
+                camera.lookAt( camera.target );
+
+                /*
+                        // distortion
+                        camera.position.copy( camera.target ).negate();
+                 */
+                
+                //NamHD: camera info
+                var log = ("x: " + camera.position.x);
+                log = log + ("<br/>y: " + camera.position.y);
+                log = log + ("<br/>z: " + camera.position.z);
+                //log = log + ("<br/>fov: " + fov);
+                document.getElementById('log').innerHTML = log;
+                //
+                airplane.propeller.rotation.x += 0.3;   // Rotate Wings
+                
+                //airplane.mesh.position.setY(200*Math.sin(THREE.Math.degToRad(deg)));       // Change height plane
+                airplane.mesh.position.setY(100*Math.sin(THREE.Math.degToRad(deg)));
+                airplane.mesh.position.setX(camera.target.x-50);   
+                airplane.mesh.position.setZ(camera.target.z-50);
+
+                deg += 1;
+                renderer.render( scene, camera );
+            }
+
+        </script>
+    </body>
+</html>
